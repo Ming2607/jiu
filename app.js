@@ -1,5 +1,11 @@
 /** 江南大学伴手礼订购 — 前端逻辑 */
 
+function assetUrl(path) {
+  if (!path || path.startsWith('http')) return path;
+  const base = window.__BASE__ || '/';
+  return base.replace(/\/?$/, '/') + path.replace(/^\//, '');
+}
+
 const state = {
   activeCategory: CATEGORIES[0].id,
   cart: [],
@@ -82,7 +88,7 @@ function renderProductCard(product) {
   return `
     <div class="product-card" data-id="${product.id}">
       <div class="product-image-wrap">
-        <img class="product-image" src="${product.image}" alt="${product.name}" loading="lazy" />
+        <img class="product-image" src="${assetUrl(product.image)}" alt="${product.name}" loading="lazy" />
       </div>
       <div class="product-body">
         <div class="product-name">${product.name}</div>
@@ -158,7 +164,7 @@ function updateCartUI() {
     .map(
       (item) => `
     <div class="cart-item" data-key="${item.key}">
-      <img class="cart-item-img" src="${item.image}" alt="" />
+      <img class="cart-item-img" src="${assetUrl(item.image)}" alt="" />
       <div class="cart-item-info">
         <div class="cart-item-name">${item.name}</div>
         <div class="cart-item-spec">${item.label}${item.note ? ` · ${item.note}` : ''} · ¥${item.price}/${item.unit}</div>

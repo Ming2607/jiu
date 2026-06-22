@@ -2,6 +2,21 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
+  <script>
+    (function () {
+      var base = '/';
+      if (location.hostname.endsWith('github.io')) {
+        var seg = location.pathname.split('/').filter(Boolean)[0];
+        if (seg) base = '/' + seg + '/';
+      }
+      window.__BASE__ = base;
+      if (base !== '/') {
+        var el = document.createElement('base');
+        el.href = base;
+        document.head.appendChild(el);
+      }
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#1A1814" />
   <title>品鉴江南｜江大伴手礼</title>
