@@ -3,6 +3,7 @@
 const ORDER_STATUS = {
   pending: { label: '待处理', className: 'status-pending' },
   shipped: { label: '已发货', className: 'status-shipped' },
+  completed: { label: '已完成', className: 'status-completed' },
   cancelled: { label: '已取消', className: 'status-cancelled' },
 };
 

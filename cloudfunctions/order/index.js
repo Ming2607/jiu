@@ -26,6 +26,7 @@ const cors = {
 const STATUS_LABEL = {
   pending: '待处理',
   shipped: '已发货',
+  completed: '已完成',
   cancelled: '已取消',
 };
 
@@ -138,9 +139,6 @@ async function updateOrder(body) {
 
   const current = normalizeOrderRecord(found[0]);
   if (!current) return respond(404, { ok: false, error: '订单不存在' });
-  if (current.status !== 'pending') {
-    return respond(400, { ok: false, error: '该订单已处理，无法重复操作' });
-  }
 
   const patch = {
     status,
@@ -149,16 +147,27 @@ async function updateOrder(body) {
   };
 
   if (status === 'cancelled') {
+    if (current.status !== 'pending') {
+      return respond(400, { ok: false, error: '仅待处理订单可以取消' });
+    }
     const reason = (body.cancelReason || '').trim();
     if (!reason) return respond(400, { ok: false, error: '请填写取消原因' });
     patch.cancelReason = reason;
-  }
-
-  if (status === 'shipped') {
+  } else if (status === 'shipped') {
+    if (current.status !== 'pending') {
+      return respond(400, { ok: false, error: '仅待处理订单可以发货' });
+    }
     const trackingNo = (body.trackingNo || '').trim();
     if (!trackingNo) return respond(400, { ok: false, error: '请填写快递单号' });
     patch.trackingNo = trackingNo;
     patch.shippedAt = new Date().toISOString();
+  } else if (status === 'completed') {
+    if (current.status !== 'shipped') {
+      return respond(400, { ok: false, error: '仅已发货订单可以标记完成' });
+    }
+    patch.completedAt = new Date().toISOString();
+  } else {
+    return respond(400, { ok: false, error: '无效的状态' });
   }
 
   await db.collection('orders').doc(current._id).update(patch);

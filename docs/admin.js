@@ -5,6 +5,8 @@ let adminKey = sessionStorage.getItem(ADMIN_KEY_STORAGE) || '';
 let orders = [];
 let actionOrderId = null;
 let actionType = null;
+let activeFilter = 'all';
+let searchQuery = '';
 
 function showToast(msg) {
   let toast = document.querySelector('.toast');
@@ -39,30 +41,64 @@ function setLoggedIn(loggedIn) {
   document.getElementById('refreshBtn').hidden = !loggedIn;
 }
 
+function isProcessedOrder(order) {
+  return order.status === 'shipped' || order.status === 'completed';
+}
+
+function getFilteredOrders() {
+  let list = orders.slice();
+
+  if (activeFilter === 'pending') {
+    list = list.filter((o) => o.status === 'pending');
+  } else if (activeFilter === 'processed') {
+    list = list.filter((o) => isProcessedOrder(o));
+  }
+
+  const q = searchQuery.trim().toUpperCase();
+  if (q) {
+    list = list.filter((o) => (o.id || '').toUpperCase().includes(q));
+  }
+
+  return list;
+}
+
+function updateFilterCounts() {
+  const pending = orders.filter((o) => o.status === 'pending').length;
+  const processed = orders.filter((o) => isProcessedOrder(o)).length;
+  document.getElementById('countAll').textContent = orders.length;
+  document.getElementById('countPending').textContent = pending;
+  document.getElementById('countProcessed').textContent = processed;
+}
+
+function updateFilterTabs() {
+  document.querySelectorAll('.filter-tab').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.filter === activeFilter);
+  });
+}
+
 async function loadOrders() {
   orders = await fetchAllOrders(adminKey);
   renderOrders();
 }
 
-function renderStats() {
-  const pending = orders.filter((o) => o.status === 'pending').length;
-  const shipped = orders.filter((o) => o.status === 'shipped').length;
-  document.getElementById('adminStats').innerHTML = `
-    <div class="stat-card"><strong>${orders.length}</strong><span>全部</span></div>
-    <div class="stat-card highlight"><strong>${pending}</strong><span>待处理</span></div>
-    <div class="stat-card"><strong>${shipped}</strong><span>已发货</span></div>`;
-}
-
 function renderOrders() {
-  renderStats();
+  updateFilterCounts();
+  updateFilterTabs();
+
   const container = document.getElementById('adminOrders');
+  const list = getFilteredOrders();
 
   if (!orders.length) {
     container.innerHTML = '<div class="orders-empty">暂无订单</div>';
     return;
   }
 
-  container.innerHTML = orders.map(renderAdminOrderCard).join('');
+  if (!list.length) {
+    container.innerHTML = '<div class="orders-empty">没有符合条件的订单</div>';
+    return;
+  }
+
+  container.innerHTML = list.map(renderAdminOrderCard).join('');
 }
 
 function renderAdminOrderCard(order) {
@@ -75,7 +111,7 @@ function renderAdminOrderCard(order) {
     .join('');
 
   let extra = '';
-  if (order.status === 'shipped' && order.trackingNo) {
+  if ((order.status === 'shipped' || order.status === 'completed') && order.trackingNo) {
     extra = `<div class="order-extra">快递单号：<strong>${order.trackingNo}</strong></div>`;
   }
   if (order.status === 'cancelled' && order.cancelReason) {
@@ -88,6 +124,11 @@ function renderAdminOrderCard(order) {
       <div class="admin-actions">
         <button class="admin-btn ship" data-action="ship" data-id="${order.id}">标记发货</button>
         <button class="admin-btn cancel" data-action="cancel" data-id="${order.id}">取消订单</button>
+      </div>`;
+  } else if (order.status === 'shipped') {
+    actions = `
+      <div class="admin-actions">
+        <button class="admin-btn complete" data-action="complete" data-id="${order.id}">标记已完成</button>
       </div>`;
   }
 
@@ -113,7 +154,6 @@ function renderAdminOrderCard(order) {
 function openActionModal(type, orderId) {
   actionType = type;
   actionOrderId = orderId;
-  const order = orders.find((o) => o.id === orderId);
   const modal = document.getElementById('actionModal');
   const title = document.getElementById('actionModalTitle');
   const body = document.getElementById('actionModalBody');
@@ -126,6 +166,12 @@ function openActionModal(type, orderId) {
         <input type="text" id="trackingNoInput" placeholder="请输入快递单号" required />
       </label>
       <button class="submit-btn" id="confirmActionBtn">确认发货</button>`;
+  } else if (type === 'complete') {
+    title.textContent = '标记已完成';
+    body.innerHTML = `
+      <p class="action-hint">确认顾客已收到货物？</p>
+      <p class="action-hint">订单 ${orderId}</p>
+      <button class="submit-btn" id="confirmActionBtn">确认已完成</button>`;
   } else {
     title.textContent = '取消订单';
     body.innerHTML = `
@@ -159,6 +205,12 @@ async function confirmAction() {
         trackingNo,
       });
       showToast('已标记发货');
+    } else if (actionType === 'complete') {
+      await updateOrderStatus(adminKey, {
+        id: actionOrderId,
+        status: 'completed',
+      });
+      showToast('已标记完成');
     } else {
       const cancelReason = document.getElementById('cancelReasonInput').value.trim();
       if (!cancelReason) throw new Error('请填写取消原因');
@@ -233,6 +285,32 @@ document.getElementById('toggleAdminKey').addEventListener('click', () => {
 
 document.getElementById('refreshBtn').addEventListener('click', () => {
   loadOrders().catch((e) => showToast(e.message));
+});
+
+document.getElementById('adminFilters').addEventListener('click', (e) => {
+  const tab = e.target.closest('.filter-tab');
+  if (!tab) return;
+  activeFilter = tab.dataset.filter;
+  renderOrders();
+});
+
+document.getElementById('orderSearchBtn').addEventListener('click', () => {
+  searchQuery = document.getElementById('orderSearchInput').value.trim();
+  renderOrders();
+});
+
+document.getElementById('orderSearchInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    searchQuery = e.target.value.trim();
+    renderOrders();
+  }
+});
+
+document.getElementById('orderSearchInput').addEventListener('input', (e) => {
+  if (!e.target.value.trim()) {
+    searchQuery = '';
+    renderOrders();
+  }
 });
 
 document.getElementById('adminOrders').addEventListener('click', (e) => {

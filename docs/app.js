@@ -222,7 +222,7 @@ function renderOrderCard(order) {
     .join('');
 
   let statusExtra = '';
-  if (order.status === 'shipped' && order.trackingNo) {
+  if ((order.status === 'shipped' || order.status === 'completed') && order.trackingNo) {
     statusExtra = `<div class="order-extra">快递单号：<strong>${order.trackingNo}</strong></div>`;
   }
   if (order.status === 'cancelled' && order.cancelReason) {

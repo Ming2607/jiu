@@ -26,8 +26,7 @@
 <body>
   <div id="adminApp" class="admin-app">
     <header class="header">
-      <a class="header-btn admin-back" href="index.html">返回</a>
-      <div class="header-brand">
+      <div class="header-brand header-brand-center">
         <h1 class="header-title"><span class="title-main">商家订单</span></h1>
       </div>
       <button class="header-btn" id="refreshBtn" hidden>刷新</button>
@@ -49,7 +48,17 @@
       </section>
 
       <section class="admin-list" id="adminList" hidden>
-        <div class="admin-stats" id="adminStats"></div>
+        <div class="admin-toolbar">
+          <div class="order-search">
+            <input type="text" id="orderSearchInput" placeholder="输入订单号查询" />
+            <button type="button" class="search-btn" id="orderSearchBtn">查询</button>
+          </div>
+          <div class="admin-filters" id="adminFilters">
+            <button type="button" class="filter-tab active" data-filter="all">全部 <em id="countAll">0</em></button>
+            <button type="button" class="filter-tab" data-filter="pending">待处理 <em id="countPending">0</em></button>
+            <button type="button" class="filter-tab" data-filter="processed">已处理 <em id="countProcessed">0</em></button>
+          </div>
+        </div>
         <div id="adminOrders"></div>
       </section>
     </main>
