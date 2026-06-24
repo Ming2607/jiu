@@ -40,7 +40,7 @@ for (const file of STATIC_FILES) {
   copyFile(path.join(ROOT, file), path.join(DOCS, file));
 }
 
-copyDir(path.join(ROOT, 'images'), path.join(DOCS, 'images'), /\.(jpe?g|webp)$/i);
+copyDir(path.join(ROOT, 'images'), path.join(DOCS, 'images'), /\.(jpe?g|webp|svg|png)$/i);
 fs.writeFileSync(path.join(DOCS, '.nojekyll'), '');
 
 const config = fs.readFileSync(path.join(DOCS, 'config.js'), 'utf8');

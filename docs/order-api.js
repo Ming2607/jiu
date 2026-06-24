@@ -1,7 +1,8 @@
 /** 订单 API 与状态（顾客端 / 商家端共用） */
 
 const ORDER_STATUS = {
-  pending: { label: '待处理', className: 'status-pending' },
+  pending: { label: '待付款', className: 'status-pending' },
+  paid: { label: '待发货', className: 'status-paid' },
   shipped: { label: '已发货', className: 'status-shipped' },
   completed: { label: '已完成', className: 'status-completed' },
   cancelled: { label: '已取消', className: 'status-cancelled' },
@@ -21,9 +22,9 @@ function getApiPath() {
   return window.APP_CONFIG?.API_PATH || '/order';
 }
 
-async function apiFetch(url, options = {}) {
+async function apiFetch(url, options = {}, timeoutMs = 18000) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 18000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const resp = await fetch(url, { ...options, signal: controller.signal });
     let data;
@@ -76,6 +77,29 @@ async function updateOrderStatus(adminKey, payload) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'update', adminKey, ...payload }),
   });
+}
+
+async function uploadPaymentProof(orderId, phone, imageBase64) {
+  const url = `${getApiBase()}${getApiPath()}`;
+  const data = await apiFetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'uploadPayment',
+      id: orderId,
+      phone,
+      imageBase64,
+    }),
+  }, 45000);
+  return normalizeOrder(data.order);
+}
+
+function updateLocalOrder(order) {
+  const orders = loadOrdersFromLocal();
+  const idx = orders.findIndex((o) => o.id === order.id);
+  if (idx >= 0) orders[idx] = { ...orders[idx], ...order };
+  else orders.unshift(order);
+  saveOrdersToLocal(orders);
 }
 
 function formatFullAddress(customer) {

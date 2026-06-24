@@ -1,6 +1,6 @@
 'use strict';
 const cloud = require('@cloudbase/node-sdk');
-const { formatOrderMessage, notifyOrder } = require('./notify');
+const { formatOrderMessage, formatPaymentUploadedMessage, notifyOrder } = require('./notify');
 
 const app = cloud.init({ env: cloud.SYMBOL_CURRENT_ENV });
 const db = app.database();
@@ -24,7 +24,8 @@ const cors = {
 };
 
 const STATUS_LABEL = {
-  pending: '待处理',
+  pending: '待付款',
+  paid: '待发货',
   shipped: '已发货',
   completed: '已完成',
   cancelled: '已取消',
@@ -49,6 +50,22 @@ function normalizeOrderRecord(doc) {
 
 function normalizeOrderList(list) {
   return (list || []).map(normalizeOrderRecord).filter(Boolean);
+}
+
+async function refreshPaymentProofUrls(orders) {
+  const fileIds = [...new Set(orders.map((o) => o.paymentProofFileId).filter(Boolean))];
+  if (!fileIds.length) return orders;
+  try {
+    const { fileList } = await app.getTempFileURL({ fileList: fileIds });
+    const map = Object.fromEntries(fileList.map((f) => [f.fileID, f.tempFileURL]));
+    return orders.map((o) =>
+      o.paymentProofFileId
+        ? { ...o, paymentProofUrl: map[o.paymentProofFileId] || o.paymentProofUrl }
+        : o
+    );
+  } catch {
+    return orders;
+  }
 }
 
 function normalizeCustomer(customer) {
@@ -108,7 +125,8 @@ async function listByPhone(phone) {
     .orderBy('createdAt', 'desc')
     .limit(50)
     .get();
-  return respond(200, { ok: true, orders: normalizeOrderList(data) });
+  const orders = await refreshPaymentProofUrls(normalizeOrderList(data));
+  return respond(200, { ok: true, orders });
 }
 
 async function listAllAdmin(adminKey) {
@@ -121,7 +139,62 @@ async function listAllAdmin(adminKey) {
     .orderBy('createdAt', 'desc')
     .limit(100)
     .get();
-  return respond(200, { ok: true, orders: normalizeOrderList(data) });
+  const orders = await refreshPaymentProofUrls(normalizeOrderList(data));
+  return respond(200, { ok: true, orders });
+}
+
+async function uploadPayment(body) {
+  const { id, phone, imageBase64 } = body;
+  if (!id || !phone || !imageBase64) {
+    return respond(400, { ok: false, error: '参数不完整' });
+  }
+
+  await ensureOrdersCollection();
+
+  const { data: found } = await db.collection('orders').where({ id }).limit(1).get();
+  if (!found?.length) return respond(404, { ok: false, error: '订单不存在' });
+
+  const current = normalizeOrderRecord(found[0]);
+  if (!current) return respond(404, { ok: false, error: '订单不存在' });
+  if (String(current.customer?.phone) !== String(phone)) {
+    return respond(403, { ok: false, error: '手机号与订单不匹配' });
+  }
+  if (current.status !== 'pending') {
+    return respond(400, { ok: false, error: '该订单已上传过付款截图或不可再上传' });
+  }
+
+  const base64 = String(imageBase64).replace(/^data:image\/\w+;base64,/, '');
+  let buffer;
+  try {
+    buffer = Buffer.from(base64, 'base64');
+  } catch {
+    return respond(400, { ok: false, error: '图片格式无效' });
+  }
+  if (buffer.length > 3 * 1024 * 1024) {
+    return respond(400, { ok: false, error: '图片过大，请压缩后重试' });
+  }
+
+  const cloudPath = `payment-proofs/${id}-${Date.now()}.jpg`;
+  const uploadRes = await app.uploadFile({ cloudPath, fileContent: buffer });
+  const fileID = uploadRes.fileID;
+  const { fileList } = await app.getTempFileURL({ fileList: [fileID] });
+  const paymentProofUrl = fileList[0]?.tempFileURL || '';
+
+  const patch = {
+    status: 'paid',
+    statusLabel: STATUS_LABEL.paid,
+    paymentProofFileId: fileID,
+    paymentProofUrl,
+    paidAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  await db.collection('orders').doc(current._id).update(patch);
+  const updated = { ...current, ...patch };
+
+  await notifyOrder(formatPaymentUploadedMessage(updated), '品鉴江南 · 付款截图');
+
+  return respond(200, { ok: true, order: updated });
 }
 
 async function updateOrder(body) {
@@ -148,14 +221,14 @@ async function updateOrder(body) {
 
   if (status === 'cancelled') {
     if (current.status !== 'pending') {
-      return respond(400, { ok: false, error: '仅待处理订单可以取消' });
+      return respond(400, { ok: false, error: '仅待付款订单可以取消' });
     }
     const reason = (body.cancelReason || '').trim();
     if (!reason) return respond(400, { ok: false, error: '请填写取消原因' });
     patch.cancelReason = reason;
   } else if (status === 'shipped') {
-    if (current.status !== 'pending') {
-      return respond(400, { ok: false, error: '仅待处理订单可以发货' });
+    if (current.status !== 'paid') {
+      return respond(400, { ok: false, error: '请先确认顾客已上传付款截图' });
     }
     const trackingNo = (body.trackingNo || '').trim();
     if (!trackingNo) return respond(400, { ok: false, error: '请填写快递单号' });
@@ -193,6 +266,7 @@ exports.main = async (event) => {
     if (event.httpMethod === 'POST') {
       const body = JSON.parse(event.body || '{}');
       if (body.action === 'update') return updateOrder(body);
+      if (body.action === 'uploadPayment') return uploadPayment(body);
       return createOrder(body);
     }
 

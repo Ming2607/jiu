@@ -135,4 +135,21 @@ async function notifyOrder(message, title = '品鉴江南 · 新订单') {
   return { ok, channels, error: ok ? undefined : errors || '全部通知渠道失败' };
 }
 
-module.exports = { formatOrderMessage, notifyServerChan, notifyWeCom, notifyOrder };
+function formatPaymentUploadedMessage(order) {
+  const lines = [
+    `【已上传付款截图】${order.id}`,
+    `客户：${order.customer.name}`,
+    `电话：${order.customer.phone}`,
+    `合计：¥${order.total}`,
+    `请核对后安排发货`,
+  ];
+  return lines.join('\n');
+}
+
+module.exports = {
+  formatOrderMessage,
+  formatPaymentUploadedMessage,
+  notifyServerChan,
+  notifyWeCom,
+  notifyOrder,
+};

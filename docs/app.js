@@ -16,6 +16,8 @@ const state = {
   addCartProductId: null,
   addCartSpec: 'bottle',
   addCartQty: 1,
+  paymentOrder: null,
+  paymentImageBase64: '',
 };
 
 // ── 初始化 ──
@@ -222,6 +224,12 @@ function renderOrderCard(order) {
     .join('');
 
   let statusExtra = '';
+  if (order.status === 'pending') {
+    statusExtra = `<div class="order-extra">请完成付款并上传截图<button type="button" class="link-btn pay-order-btn" data-id="${order.id}" data-phone="${order.customer.phone}">去付款</button></div>`;
+  }
+  if (order.status === 'paid') {
+    statusExtra = `<div class="order-extra">付款截图已提交，商家核对后将发货</div>`;
+  }
   if ((order.status === 'shipped' || order.status === 'completed') && order.trackingNo) {
     statusExtra = `<div class="order-extra">快递单号：<strong>${order.trackingNo}</strong></div>`;
   }
@@ -460,6 +468,90 @@ function openCheckout() {
   document.getElementById('checkoutModal').classList.add('show');
 }
 
+function getPaymentQrUrl(key) {
+  const path = window.APP_CONFIG?.PAYMENT?.[key] || `images/pay-${key}.svg`;
+  return assetUrl(path);
+}
+
+function compressImageFile(file, maxWidth = 1200, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('无法读取图片'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('图片格式不支持'));
+      img.onload = () => {
+        let w = img.width;
+        let h = img.height;
+        if (w > maxWidth) {
+          h = Math.round((maxWidth / w) * h);
+          w = maxWidth;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function resetPaymentUploadUI() {
+  state.paymentImageBase64 = '';
+  const input = document.getElementById('paymentProofInput');
+  const hint = document.getElementById('paymentPreviewHint');
+  const img = document.getElementById('paymentPreviewImg');
+  input.value = '';
+  hint.hidden = false;
+  img.hidden = true;
+  img.src = '';
+}
+
+function openPaymentModal(order) {
+  state.paymentOrder = order;
+  resetPaymentUploadUI();
+  document.getElementById('paymentOrderId').textContent = order.id;
+  document.getElementById('paymentAmount').textContent = `¥${order.total}`;
+  document.getElementById('payQrAlipay').src = getPaymentQrUrl('alipay');
+  document.getElementById('payQrWechat').src = getPaymentQrUrl('wechat');
+  document.getElementById('paymentModal').classList.add('show');
+}
+
+function closePaymentModal() {
+  document.getElementById('paymentModal').classList.remove('show');
+  state.paymentOrder = null;
+  resetPaymentUploadUI();
+}
+
+async function submitPaymentProof() {
+  const order = state.paymentOrder;
+  if (!order) return;
+  if (!state.paymentImageBase64) {
+    showToast('请先选择付款截图');
+    return;
+  }
+  const btn = document.getElementById('submitPaymentBtn');
+  btn.disabled = true;
+  btn.textContent = '上传中…';
+  try {
+    const updated = await uploadPaymentProof(order.id, order.customer.phone, state.paymentImageBase64);
+    updateLocalOrder(updated);
+    closePaymentModal();
+    document.getElementById('successTitle').textContent = '付款截图已提交';
+    document.getElementById('successMsg').textContent =
+      `订单 ${order.id} 的付款截图已提交，商家核对后将安排发货。您可在「订单」中查看进度。`;
+    document.getElementById('successModal').classList.add('show');
+  } catch (e) {
+    showToast(e.message || '上传失败，请重试');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '提交付款截图';
+  }
+}
+
 async function submitOrder(form) {
   const addrErr = validateAddress(form);
   if (addrErr) throw new Error(addrErr);
@@ -469,7 +561,7 @@ async function submitOrder(form) {
     id: 'ORD' + Date.now(),
     createdAt: new Date().toISOString(),
     status: 'pending',
-    statusLabel: '待处理',
+    statusLabel: '待付款',
     customer: {
       name: form.name.value.trim(),
       phone: form.phone.value.trim(),
@@ -522,6 +614,12 @@ function bindEvents() {
       openAddCartModal(addBtn.dataset.product);
       return;
     }
+
+    const payBtn = e.target.closest('.pay-order-btn');
+    if (payBtn) {
+      const order = loadMyOrders().find((o) => o.id === payBtn.dataset.id);
+      if (order) openPaymentModal(order);
+    }
   });
 
   document.getElementById('addCartBody').addEventListener('click', (e) => {
@@ -573,6 +671,28 @@ function bindEvents() {
     updateCartUI();
   });
 
+  document.getElementById('paymentPreviewBox').addEventListener('click', () => {
+    document.getElementById('paymentProofInput').click();
+  });
+
+  document.getElementById('paymentProofInput').addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      state.paymentImageBase64 = await compressImageFile(file);
+      const hint = document.getElementById('paymentPreviewHint');
+      const img = document.getElementById('paymentPreviewImg');
+      hint.hidden = true;
+      img.hidden = false;
+      img.src = state.paymentImageBase64;
+    } catch (err) {
+      showToast(err.message || '图片处理失败');
+    }
+  });
+
+  document.getElementById('submitPaymentBtn').addEventListener('click', submitPaymentProof);
+  document.getElementById('closePayment').addEventListener('click', closePaymentModal);
+
   document.getElementById('orderForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -582,12 +702,10 @@ function bindEvents() {
     try {
       const order = await submitOrder(form);
       document.getElementById('checkoutModal').classList.remove('show');
-      document.getElementById('successMsg').textContent =
-        `订单号 ${order.id} 已提交，我们将尽快处理。您可在「订单」中查看进度。`;
-      document.getElementById('successModal').classList.add('show');
       state.cart = [];
       updateCartUI();
       form.reset();
+      openPaymentModal(order);
     } catch (err) {
       showToast(err.message || '提交失败，请稍后重试');
     } finally {

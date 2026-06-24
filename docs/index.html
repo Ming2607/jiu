@@ -132,12 +132,51 @@
       </div>
     </div>
 
-    <!-- 下单成功 -->
+    <!-- 下单成功 / 付款引导 -->
+    <div class="modal" id="paymentModal">
+      <div class="modal-content payment-content">
+        <div class="modal-header">
+          <h2>请完成付款</h2>
+          <button class="close-btn" id="closePayment">&times;</button>
+        </div>
+        <div class="payment-body">
+          <p class="payment-intro">订单 <strong id="paymentOrderId"></strong> 已提交，请按以下步骤完成付款：</p>
+          <p class="payment-amount">应付金额：<strong id="paymentAmount">¥0</strong></p>
+          <ol class="payment-steps">
+            <li>扫描下方支付宝或微信收款码完成转账</li>
+            <li>转账备注请填写订单号</li>
+            <li>上传付款截图，商家核对后将安排发货</li>
+          </ol>
+          <div class="payment-qr-grid">
+            <div class="payment-qr-item">
+              <span>支付宝</span>
+              <img id="payQrAlipay" alt="支付宝收款码" />
+            </div>
+            <div class="payment-qr-item">
+              <span>微信</span>
+              <img id="payQrWechat" alt="微信收款码" />
+            </div>
+          </div>
+          <div class="payment-upload">
+            <label class="upload-label">
+              <span>上传付款截图</span>
+              <input type="file" id="paymentProofInput" accept="image/*" hidden />
+              <div class="upload-box" id="paymentPreviewBox">
+                <span id="paymentPreviewHint">点击选择截图</span>
+                <img id="paymentPreviewImg" hidden alt="付款截图预览" />
+              </div>
+            </label>
+            <button type="button" class="submit-btn" id="submitPaymentBtn">提交付款截图</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="modal" id="successModal">
       <div class="modal-content success-content">
         <div class="success-icon">✓</div>
-        <h2>订购成功</h2>
-        <p id="successMsg">我们已收到您的订购，将尽快与您联系确认。</p>
+        <h2 id="successTitle">提交成功</h2>
+        <p id="successMsg">我们已收到您的信息。</p>
         <button class="submit-btn" id="successOk">好的</button>
       </div>
     </div>

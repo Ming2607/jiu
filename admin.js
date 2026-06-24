@@ -46,6 +46,8 @@ function getFilteredOrders() {
 
   if (activeFilter === 'pending') {
     list = list.filter((o) => o.status === 'pending');
+  } else if (activeFilter === 'paid') {
+    list = list.filter((o) => o.status === 'paid');
   } else if (activeFilter === 'shipped') {
     list = list.filter((o) => o.status === 'shipped');
   } else if (activeFilter === 'completed') {
@@ -63,6 +65,7 @@ function getFilteredOrders() {
 function updateFilterCounts() {
   document.getElementById('countAll').textContent = orders.length;
   document.getElementById('countPending').textContent = orders.filter((o) => o.status === 'pending').length;
+  document.getElementById('countPaid').textContent = orders.filter((o) => o.status === 'paid').length;
   document.getElementById('countShipped').textContent = orders.filter((o) => o.status === 'shipped').length;
   document.getElementById('countCompleted').textContent = orders.filter((o) => o.status === 'completed').length;
 }
@@ -108,6 +111,14 @@ function renderAdminOrderCard(order) {
     .join('');
 
   let extra = '';
+  if (order.paymentProofUrl) {
+    extra = `<div class="order-extra payment-proof">
+      <span>付款截图</span>
+      <a href="${order.paymentProofUrl}" target="_blank" rel="noopener">
+        <img src="${order.paymentProofUrl}" alt="付款截图" class="payment-proof-thumb" />
+      </a>
+    </div>`;
+  }
   if ((order.status === 'shipped' || order.status === 'completed') && order.trackingNo) {
     extra = `<div class="order-extra">快递单号：<strong>${order.trackingNo}</strong></div>`;
   }
@@ -119,8 +130,12 @@ function renderAdminOrderCard(order) {
   if (order.status === 'pending') {
     actions = `
       <div class="admin-actions">
-        <button class="admin-btn ship" data-action="ship" data-id="${order.id}">标记发货</button>
         <button class="admin-btn cancel" data-action="cancel" data-id="${order.id}">取消订单</button>
+      </div>`;
+  } else if (order.status === 'paid') {
+    actions = `
+      <div class="admin-actions">
+        <button class="admin-btn ship" data-action="ship" data-id="${order.id}">标记发货</button>
       </div>`;
   } else if (order.status === 'shipped') {
     actions = `
