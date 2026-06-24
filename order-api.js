@@ -31,15 +31,22 @@ async function apiFetch(url, options = {}, timeoutMs = 18000) {
     try {
       data = await resp.json();
     } catch {
+      if (resp.status === 413) throw new Error('图片过大，请重新截屏后再上传');
       throw new Error('服务器响应异常');
     }
     if (!resp.ok || data.ok === false) {
       if (resp.status === 403) throw new Error('管理密钥不正确，请重新输入');
-      throw new Error(data.error || `请求失败（${resp.status}）`);
+      if (resp.status === 413 || data.code === 'EXCEED_MAX_PAYLOAD_SIZE') {
+        throw new Error('图片过大，请重新截屏后再上传');
+      }
+      throw new Error(data.error || data.message || `请求失败（${resp.status}）`);
     }
     return data;
   } catch (e) {
     if (e.name === 'AbortError') throw new Error('连接超时，请稍后重试');
+    if (e.message === 'Load failed' || e.message === 'Failed to fetch') {
+      throw new Error('网络异常，请检查网络后重试');
+    }
     throw e;
   } finally {
     clearTimeout(timer);
@@ -79,17 +86,80 @@ async function updateOrderStatus(adminKey, payload) {
   });
 }
 
+function getMaxUploadPayload() {
+  return window.APP_CONFIG?.MAX_UPLOAD_PAYLOAD || 100 * 1024;
+}
+
+function buildUploadPayload(orderId, phone, imageBase64) {
+  return JSON.stringify({
+    action: 'uploadPayment',
+    id: orderId,
+    phone,
+    imageBase64,
+  });
+}
+
+function fitsUploadPayload(orderId, phone, imageBase64) {
+  return buildUploadPayload(orderId, phone, imageBase64).length <= getMaxUploadPayload();
+}
+
+let cloudbaseApp = null;
+
+function getCloudbaseApp() {
+  if (cloudbaseApp) return cloudbaseApp;
+  const envId = window.APP_CONFIG?.ENV_ID;
+  if (!envId || typeof cloudbase === 'undefined') return null;
+  cloudbaseApp = cloudbase.init({ env: envId });
+  return cloudbaseApp;
+}
+
+async function ensureCloudbaseAuth(app) {
+  const auth = app.auth();
+  const loginState = await auth.getLoginState();
+  if (!loginState) await auth.signInAnonymously();
+}
+
+function dataUrlToFile(dataUrl, filename) {
+  const [header, base64] = dataUrl.split(',');
+  const mime = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new File([bytes], filename, { type: mime });
+}
+
+async function uploadImageToCloudStorage(orderId, imageBase64) {
+  const app = getCloudbaseApp();
+  if (!app) return null;
+  await ensureCloudbaseAuth(app);
+  const file = dataUrlToFile(imageBase64, `payment-${orderId}.jpg`);
+  const cloudPath = `payment-proofs/${orderId}-${Date.now()}.jpg`;
+  const uploadRes = await app.uploadFile({ cloudPath, filePath: file });
+  return uploadRes.fileID;
+}
+
 async function uploadPaymentProof(orderId, phone, imageBase64) {
   const url = `${getApiBase()}${getApiPath()}`;
+
+  let fileID = null;
+  try {
+    fileID = await uploadImageToCloudStorage(orderId, imageBase64);
+  } catch {
+    fileID = null;
+  }
+
+  if (!fileID && !fitsUploadPayload(orderId, phone, imageBase64)) {
+    throw new Error('图片过大，请重新截屏后再上传');
+  }
+
+  const payload = fileID
+    ? { action: 'uploadPayment', id: orderId, phone, fileID }
+    : { action: 'uploadPayment', id: orderId, phone, imageBase64 };
+
   const data = await apiFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'uploadPayment',
-      id: orderId,
-      phone,
-      imageBase64,
-    }),
+    body: JSON.stringify(payload),
   }, 45000);
   return normalizeOrder(data.order);
 }

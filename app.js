@@ -589,33 +589,28 @@ function estimateBase64Bytes(dataUrl) {
   return Math.ceil(base64.length * 0.75);
 }
 
-async function preparePaymentImage(file) {
-  const maxBytes = 2.8 * 1024 * 1024;
+async function preparePaymentImage(file, orderId, phone) {
   const attempts = [
-    [1200, 0.82],
-    [900, 0.72],
+    [960, 0.72],
     [720, 0.62],
+    [560, 0.52],
+    [480, 0.45],
+    [400, 0.38],
+    [320, 0.32],
+    [260, 0.28],
   ];
 
   for (const [width, quality] of attempts) {
     try {
       const dataUrl = await compressImageFile(file, width, quality);
-      if (estimateBase64Bytes(dataUrl) <= maxBytes) return dataUrl;
+      if (orderId && phone && fitsUploadPayload(orderId, phone, dataUrl)) return dataUrl;
+      if (!orderId && estimateBase64Bytes(dataUrl) <= 72 * 1024) return dataUrl;
     } catch {
       /* try next size */
     }
   }
 
-  try {
-    const dataUrl = await compressImageFile(file, 640, 0.55);
-    if (estimateBase64Bytes(dataUrl) <= maxBytes) return dataUrl;
-  } catch {
-    /* fall through */
-  }
-
-  const raw = await readFileAsDataURL(file);
-  if (estimateBase64Bytes(raw) <= maxBytes) return raw;
-  throw new Error('图片过大，请重新截屏后再上传');
+  throw new Error('图片过大，请裁剪截图后再试');
 }
 
 function resetPaymentUploadUI() {
@@ -653,6 +648,10 @@ async function submitPaymentProof() {
   if (!order) return;
   if (!state.paymentImageBase64) {
     showToast('请先选择付款截图');
+    return;
+  }
+  if (!fitsUploadPayload(order.id, order.customer.phone, state.paymentImageBase64)) {
+    showToast('图片过大，请重新选择截图');
     return;
   }
   const btn = document.getElementById('submitPaymentBtn');
@@ -798,9 +797,14 @@ function bindEvents() {
     if (!file) return;
     const hint = document.getElementById('paymentPreviewHint');
     const img = document.getElementById('paymentPreviewImg');
+    const order = state.paymentOrder;
     hint.textContent = '图片处理中…';
     try {
-      state.paymentImageBase64 = await preparePaymentImage(file);
+      state.paymentImageBase64 = await preparePaymentImage(
+        file,
+        order?.id,
+        order?.customer?.phone
+      );
       hint.hidden = true;
       img.hidden = false;
       img.src = state.paymentImageBase64;

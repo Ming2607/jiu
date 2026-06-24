@@ -144,8 +144,8 @@ async function listAllAdmin(adminKey) {
 }
 
 async function uploadPayment(body) {
-  const { id, phone, imageBase64 } = body;
-  if (!id || !phone || !imageBase64) {
+  const { id, phone, imageBase64, fileID } = body;
+  if (!id || !phone || (!imageBase64 && !fileID)) {
     return respond(400, { ok: false, error: '参数不完整' });
   }
 
@@ -163,27 +163,40 @@ async function uploadPayment(body) {
     return respond(400, { ok: false, error: '该订单已上传过付款截图或不可再上传' });
   }
 
-  const base64 = String(imageBase64).replace(/^data:image\/\w+;base64,/, '');
-  let buffer;
-  try {
-    buffer = Buffer.from(base64, 'base64');
-  } catch {
-    return respond(400, { ok: false, error: '图片格式无效' });
-  }
-  if (buffer.length > 3 * 1024 * 1024) {
-    return respond(400, { ok: false, error: '图片过大，请压缩后重试' });
-  }
+  let paymentProofFileId;
+  let paymentProofUrl = '';
 
-  const cloudPath = `payment-proofs/${id}-${Date.now()}.jpg`;
-  const uploadRes = await app.uploadFile({ cloudPath, fileContent: buffer });
-  const fileID = uploadRes.fileID;
-  const { fileList } = await app.getTempFileURL({ fileList: [fileID] });
-  const paymentProofUrl = fileList[0]?.tempFileURL || '';
+  if (fileID) {
+    paymentProofFileId = fileID;
+    try {
+      const { fileList } = await app.getTempFileURL({ fileList: [fileID] });
+      paymentProofUrl = fileList[0]?.tempFileURL || '';
+    } catch {
+      paymentProofUrl = '';
+    }
+  } else {
+    const base64 = String(imageBase64).replace(/^data:image\/\w+;base64,/, '');
+    let buffer;
+    try {
+      buffer = Buffer.from(base64, 'base64');
+    } catch {
+      return respond(400, { ok: false, error: '图片格式无效' });
+    }
+    if (buffer.length > 900 * 1024) {
+      return respond(400, { ok: false, error: '图片过大，请压缩后重试' });
+    }
+
+    const cloudPath = `payment-proofs/${id}-${Date.now()}.jpg`;
+    const uploadRes = await app.uploadFile({ cloudPath, fileContent: buffer });
+    paymentProofFileId = uploadRes.fileID;
+    const { fileList } = await app.getTempFileURL({ fileList: [paymentProofFileId] });
+    paymentProofUrl = fileList[0]?.tempFileURL || '';
+  }
 
   const patch = {
     status: 'paid',
     statusLabel: STATUS_LABEL.paid,
-    paymentProofFileId: fileID,
+    paymentProofFileId: paymentProofFileId,
     paymentProofUrl,
     paidAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
