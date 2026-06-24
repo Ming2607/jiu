@@ -18,6 +18,9 @@ const state = {
   addCartQty: 1,
   paymentOrder: null,
   paymentImageBase64: '',
+  qrPreviewUrl: '',
+  qrPreviewTitle: '',
+  qrPreviewFilename: '',
 };
 
 // ── 初始化 ──
@@ -469,8 +472,81 @@ function openCheckout() {
 }
 
 function getPaymentQrUrl(key) {
-  const path = window.APP_CONFIG?.PAYMENT?.[key] || `images/pay-${key}.svg`;
+  const path = window.APP_CONFIG?.PAYMENT?.[key] || `images/pay-${key}.jpg`;
   return assetUrl(path);
+}
+
+async function copyText(text, successMsg) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    showToast(successMsg);
+  } catch {
+    showToast('复制失败，请手动复制');
+  }
+}
+
+function copyPaymentOrderId() {
+  const id = document.getElementById('paymentOrderId').textContent.trim();
+  if (id) copyText(id, '订单号已复制');
+}
+
+function openQrPreview(url, title, filename) {
+  state.qrPreviewUrl = url;
+  state.qrPreviewTitle = title;
+  state.qrPreviewFilename = filename;
+  document.getElementById('qrPreviewTitle').textContent = title;
+  document.getElementById('qrPreviewImg').src = url;
+  document.getElementById('qrPreviewModal').classList.add('show');
+}
+
+function closeQrPreview() {
+  document.getElementById('qrPreviewModal').classList.remove('show');
+  document.getElementById('qrPreviewImg').src = '';
+  state.qrPreviewUrl = '';
+  state.qrPreviewTitle = '';
+  state.qrPreviewFilename = '';
+}
+
+async function saveQrImage() {
+  const url = state.qrPreviewUrl;
+  if (!url) return;
+  const filename = state.qrPreviewFilename || 'payment-qr.jpg';
+
+  try {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: state.qrPreviewTitle || '收款码' });
+      return;
+    }
+
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+    showToast('图片已保存，请在相册或下载中查看');
+  } catch {
+    showToast('请长按图片保存到相册');
+  }
 }
 
 function compressImageFile(file, maxWidth = 1200, quality = 0.82) {
@@ -517,6 +593,8 @@ function openPaymentModal(order) {
   document.getElementById('paymentAmount').textContent = `¥${order.total}`;
   document.getElementById('payQrAlipay').src = getPaymentQrUrl('alipay');
   document.getElementById('payQrWechat').src = getPaymentQrUrl('wechat');
+  document.getElementById('payQrAlipayBtn').dataset.url = getPaymentQrUrl('alipay');
+  document.getElementById('payQrWechatBtn').dataset.url = getPaymentQrUrl('wechat');
   document.getElementById('paymentModal').classList.add('show');
 }
 
@@ -692,6 +770,16 @@ function bindEvents() {
 
   document.getElementById('submitPaymentBtn').addEventListener('click', submitPaymentProof);
   document.getElementById('closePayment').addEventListener('click', closePaymentModal);
+  document.getElementById('copyOrderIdBtn').addEventListener('click', copyPaymentOrderId);
+
+  document.getElementById('payQrAlipayBtn').addEventListener('click', () => {
+    openQrPreview(getPaymentQrUrl('alipay'), '支付宝收款码', 'pay-alipay.jpg');
+  });
+  document.getElementById('payQrWechatBtn').addEventListener('click', () => {
+    openQrPreview(getPaymentQrUrl('wechat'), '微信收款码', 'pay-wechat.jpg');
+  });
+  document.getElementById('closeQrPreview').addEventListener('click', closeQrPreview);
+  document.getElementById('saveQrBtn').addEventListener('click', saveQrImage);
 
   document.getElementById('orderForm').addEventListener('submit', async (e) => {
     e.preventDefault();

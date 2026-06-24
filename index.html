@@ -140,7 +140,19 @@
           <button class="close-btn" id="closePayment">&times;</button>
         </div>
         <div class="payment-body">
-          <p class="payment-intro">订单 <strong id="paymentOrderId"></strong> 已提交，请按以下步骤完成付款：</p>
+          <p class="payment-intro">
+            订单
+            <span class="payment-order-id">
+              <strong id="paymentOrderId"></strong>
+              <button type="button" class="copy-order-btn" id="copyOrderIdBtn" aria-label="复制订单号">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+            </span>
+            已提交，请按以下步骤完成付款：
+          </p>
           <p class="payment-amount">应付金额：<strong id="paymentAmount">¥0</strong></p>
           <ol class="payment-steps">
             <li>扫描下方支付宝或微信收款码完成转账</li>
@@ -150,13 +162,18 @@
           <div class="payment-qr-grid">
             <div class="payment-qr-item">
               <span>支付宝</span>
-              <img id="payQrAlipay" alt="支付宝收款码" />
+              <button type="button" class="payment-qr-btn" id="payQrAlipayBtn" aria-label="放大查看支付宝收款码">
+                <img id="payQrAlipay" alt="支付宝收款码" />
+              </button>
             </div>
             <div class="payment-qr-item">
               <span>微信</span>
-              <img id="payQrWechat" alt="微信收款码" />
+              <button type="button" class="payment-qr-btn" id="payQrWechatBtn" aria-label="放大查看微信收款码">
+                <img id="payQrWechat" alt="微信收款码" />
+              </button>
             </div>
           </div>
+          <p class="payment-qr-hint">点击收款码可放大查看，长按或保存到相册</p>
           <div class="payment-upload">
             <label class="upload-label">
               <span>上传付款截图</span>
@@ -168,6 +185,20 @@
             </label>
             <button type="button" class="submit-btn" id="submitPaymentBtn">提交付款截图</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="qrPreviewModal">
+      <div class="modal-content qr-preview-content">
+        <div class="modal-header">
+          <h2 id="qrPreviewTitle">收款码</h2>
+          <button class="close-btn" id="closeQrPreview">&times;</button>
+        </div>
+        <div class="qr-preview-body">
+          <img id="qrPreviewImg" alt="收款码大图" />
+          <p class="qr-preview-hint">长按图片可保存到相册</p>
+          <button type="button" class="submit-btn" id="saveQrBtn">保存到相册</button>
         </div>
       </div>
     </div>
