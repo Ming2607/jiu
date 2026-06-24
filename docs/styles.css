@@ -1483,8 +1483,8 @@ body {
 
 .payment-qr-item img {
   width: 100%;
-  max-width: 140px;
-  aspect-ratio: 1;
+  max-width: 150px;
+  max-height: 220px;
   object-fit: contain;
   background: #fff;
 }
