@@ -765,12 +765,34 @@ body {
   gap: 8px;
 }
 
+.payment-proof .proof-hint {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 6px;
+}
+
+.payment-proof-btn {
+  display: inline-block;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.payment-proof-btn:active {
+  opacity: 0.85;
+}
+
 .payment-proof-thumb {
+  display: block;
   max-width: 120px;
   max-height: 120px;
   border: 1px solid var(--border);
   border-radius: 2px;
   object-fit: cover;
+  pointer-events: none;
 }
 
 /* ── 地址表单 ── */

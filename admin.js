@@ -111,20 +111,22 @@ function renderAdminOrderCard(order) {
     .join('');
 
   let extra = '';
+  const extraParts = [];
   if (order.paymentProofUrl) {
-    extra = `<div class="order-extra payment-proof">
-      <span>付款截图</span>
-      <a href="${order.paymentProofUrl}" target="_blank" rel="noopener">
+    extraParts.push(`<div class="order-extra payment-proof">
+      <span>付款截图 <em class="proof-hint">点击查看大图</em></span>
+      <button type="button" class="payment-proof-btn" data-proof-url="${order.paymentProofUrl}" aria-label="查看付款截图">
         <img src="${order.paymentProofUrl}" alt="付款截图" class="payment-proof-thumb" />
-      </a>
-    </div>`;
+      </button>
+    </div>`);
   }
   if ((order.status === 'shipped' || order.status === 'completed') && order.trackingNo) {
-    extra = `<div class="order-extra">快递单号：<strong>${order.trackingNo}</strong></div>`;
+    extraParts.push(`<div class="order-extra">快递单号：<strong>${order.trackingNo}</strong></div>`);
   }
   if (order.status === 'cancelled' && order.cancelReason) {
-    extra = `<div class="order-extra cancel-reason">取消原因：${order.cancelReason}</div>`;
+    extraParts.push(`<div class="order-extra cancel-reason">取消原因：${order.cancelReason}</div>`);
   }
+  extra = extraParts.join('');
 
   let actions = '';
   if (order.status === 'pending') {
@@ -201,6 +203,17 @@ function closeActionModal() {
   document.getElementById('actionModal').classList.remove('show');
   actionOrderId = null;
   actionType = null;
+}
+
+function openImagePreview(url, title = '付款截图') {
+  document.getElementById('imagePreviewTitle').textContent = title;
+  document.getElementById('imagePreviewImg').src = url;
+  document.getElementById('imagePreviewModal').classList.add('show');
+}
+
+function closeImagePreview() {
+  document.getElementById('imagePreviewModal').classList.remove('show');
+  document.getElementById('imagePreviewImg').src = '';
 }
 
 async function confirmAction() {
@@ -325,10 +338,18 @@ document.getElementById('orderSearchInput').addEventListener('input', (e) => {
 });
 
 document.getElementById('adminOrders').addEventListener('click', (e) => {
+  const proofBtn = e.target.closest('.payment-proof-btn');
+  if (proofBtn) {
+    openImagePreview(proofBtn.dataset.proofUrl);
+    return;
+  }
+
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
   openActionModal(btn.dataset.action, btn.dataset.id);
 });
+
+document.getElementById('closeImagePreview').addEventListener('click', closeImagePreview);
 
 document.getElementById('closeActionModal').addEventListener('click', closeActionModal);
 document.getElementById('actionModalBody').addEventListener('click', (e) => {
