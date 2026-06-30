@@ -72,14 +72,9 @@ body {
 .brand-mark {
   width: 44px;
   height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(184, 149, 106, 0.45);
-  font-family: 'Noto Serif SC', serif;
-  font-size: 15px;
-  letter-spacing: 0.12em;
-  color: var(--gold-light);
+  display: block;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .brand h1 {

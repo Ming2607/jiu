@@ -1,4 +1,4 @@
-/** 江南伴手礼文化展示 — 内容数据（仅供介绍与展示） */
+/** 品鉴江南文化展示 — 内容数据（仅供介绍与展示） */
 
 const VIEW_MODES = {
   category: { label: '按类别', key: 'category' },
